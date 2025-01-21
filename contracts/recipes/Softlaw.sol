@@ -44,7 +44,7 @@ contract Softlaw is CollectionMinter, TokenMinter {
         string jurisdiction;
         bool active;
         address collectionAddress;
-        string details; // JSON string with IP-specific details
+        string details;
     }
 
     uint256 tokenRegistry;
@@ -197,6 +197,7 @@ contract Softlaw is CollectionMinter, TokenMinter {
     }
 
     function CompleteLicense(uint256 _licenseId) public view returns (uint256) {
+        //todo
         return 1;
     }
 

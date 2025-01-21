@@ -1,33 +1,62 @@
 import { ethers } from "hardhat";
-// import { parseEther } from "ethers";
-// import { Address } from "@unique-nft/utils";
-// import { expect } from "chai";
-import testConfig from "./utils/config";
+import { parseEther } from "ethers";
+import { Address } from "@unique-nft/utils";
 
-async function main() {
-  // Deploy SoftlawContract Contract library
-  const Softlaw = await ethers.getContractFactory("Softlaw");
-  const converter = await Softlaw.deploy();
-  await converter.waitForDeployment();
-  console.log("Softlaw deployed to:", await converter.getAddress());
+async function main(): Promise<void> {
+  try {
+    const [minterOwner] = await ethers.getSigners();
+    console.log("Deploying contracts with account:", minterOwner.address);
 
-  // Deploy Softlaw with library
-  const SoftlawContract = await ethers.getContractFactory("SoftlawContract", {
-    libraries: {
-      Softlaw: await converter.getAddress(),
-    },
-  });
+    const balanceMinterOwner = await ethers.provider.getBalance(minterOwner);
+    console.log("Account balance:", ethers.formatEther(balanceMinterOwner));
 
-  const initialBalance = ethers.parseEther("0.1");
-  const softlaw = await SoftlawContract.deploy({ value: initialBalance });
-  await softlaw.waitForDeployment();
+    // Verify balance
+    if (balanceMinterOwner < parseEther("100")) {
+      throw new Error("Insufficient balance for deployment");
+    }
 
-  console.log("SoftlawContract deployed to:", await softlaw.getAddress());
+    // Deploy Softlaw
+    console.log("\nDeploying Softlaw...");
+    const Softlaw = await ethers.getContractFactory("Softlaw");
+
+    const softlaw = await Softlaw.connect(minterOwner).deploy({
+      gasLimit: 3_000_000,
+      value: parseEther("100"),
+    });
+
+    await softlaw.waitForDeployment();
+    const softlawAddress = await softlaw.getAddress();
+
+    // Log addresses in both formats
+    console.log("\nDeployment Summary: ");
+    console.log("Softlaw (EVM):", softlawAddress);
+    console.log(
+      "Softlaw (SUB):",
+      Address.mirror.ethereumToSubstrate(softlawAddress),
+    );
+
+    // Log final balance and costs
+    const finalBalance = await ethers.provider.getBalance(minterOwner);
+    console.log("\nFinal balance:", ethers.formatEther(finalBalance));
+    console.log(
+      "Deploy cost:",
+      ethers.formatEther(balanceMinterOwner - finalBalance),
+    );
+  } catch (error) {
+    console.error("\nDeployment Error:");
+    console.error("-----------------");
+    if (error instanceof Error) {
+      console.error("Message:", error.message);
+    } else {
+      console.error("Unknown error:", error);
+    }
+    throw error;
+  }
 }
 
 main()
   .then(() => process.exit(0))
-  .catch((error) => {
+  .catch((error: Error) => {
     console.error(error);
     process.exit(1);
   });
