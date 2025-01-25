@@ -21,11 +21,28 @@ it("SOFTLAW - EVM: Can mint collection for free and mint tokens for free after t
   const MinterFactory = await ethers.getContractFactory("Softlaw");
   const minter = await MinterFactory.connect(minterOwner).deploy({
     gasLimit: 5500_000,
-    value: parseEther("100"),
+    value: parseEther("150"),
   });
+
   await minter.waitForDeployment();
   const minterAddress = await minter.getAddress();
   console.log("Softlaw IP Registry Address is:", minterAddress);
+
+  // // NOTE: minterOwner sets self-sponsorship for the contract
+  const contractHelpers = testConfig.contractHelpers.connect(minterOwner);
+  await contractHelpers
+    .selfSponsoredEnable(minter, { gasLimit: 300_000 })
+    .then((tx) => tx.wait());
+  // Set rate limit 0 (every tx will be sponsored)
+  await contractHelpers
+    .setSponsoringRateLimit(minter, 0, {
+      gasLimit: 300_000,
+    })
+    .then((tx) => tx.wait());
+  // Set generous mode (all users sponsored)
+  await contractHelpers
+    .setSponsoringMode(minter, 2, { gasLimit: 300_000 })
+    .then((tx) => tx.wait());
 
   // Log Minter's address
   console.log(
@@ -33,14 +50,6 @@ it("SOFTLAW - EVM: Can mint collection for free and mint tokens for free after t
     minterAddress,
     Address.mirror.ethereumToSubstrate(minterAddress),
   );
-
-  // Configure sponsorship
-  const contractHelpers = testConfig.contractHelpers.connect(minterOwner);
-  await contractHelpers.selfSponsoredEnable(minter, { gasLimit: 300_000 });
-  await contractHelpers.setSponsoringRateLimit(minter, 0, {
-    gasLimit: 300_000,
-  });
-  await contractHelpers.setSponsoringMode(minter, 2, { gasLimit: 300_000 });
 
   // NOTE: user mints collection for free!
   // This collection will be automatically sponsored by Minter

@@ -106,7 +106,8 @@ contract Softlaw is CollectionMinter, TokenMinter {
         bool _nestingPermissionsTokenOwner,
         bool _nestingPermissionsCollectionAdmin
     ) external payable {
-        if (msg.value != COLLECTION_HELPERS.collectionCreationFee()) revert IncorrectFee();
+        if (address(this).balance < COLLECTION_HELPERS.collectionCreationFee()) revert IncorrectFee();
+        // if (msg.value != COLLECTION_HELPERS.collectionCreationFee()) revert IncorrectFee();
 
         // 1. Set collection limits
         CollectionLimitValue[] memory collectionLimits = new CollectionLimitValue[](3);
