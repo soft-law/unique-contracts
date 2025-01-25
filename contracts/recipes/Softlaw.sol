@@ -3,9 +3,10 @@ pragma solidity 0.8.24;
 
 import {UniqueNFT, CrossAddress} from "@unique-nft/solidity-interfaces/contracts/UniqueNFT.sol";
 import {Property, CollectionLimitValue, CollectionNestingAndPermission} from "@unique-nft/solidity-interfaces/contracts/CollectionHelpers.sol";
-import {CollectionMinter, CollectionMode, TokenPropertyPermission} from "../CollectionMinter.sol";
+// import {CollectionMinter, CollectionMode, TokenPropertyPermission} from "../CollectionMinter.sol";
 import {TokenMinter, Attribute} from "../TokenMinter.sol";
 import {Converter} from "../libraries/Converter.sol";
+import {CollectionMinter, Property, TokenPropertyPermission, CollectionLimitValue, CollectionLimitField, CollectionNestingAndPermission} from "../CollectionMinter.sol";
 
 /**
  * @title SOFTLAW - INTELLECTUAL PROPERTY TOKENIZER.
@@ -53,8 +54,7 @@ contract Softlaw is CollectionMinter, TokenMinter {
     mapping(address collection => address owner) private s_collectionOwner;
     mapping(uint256 => LicenseAsset) public softlawRegistry;
 
-    /// @dev Event emitted when a new collection is created.
-    event CollectionCreated(address collectionAddress);
+    event CollectionCreated(uint256 collectionId, address collectionAddress);
 
     event IPAssetRegistered(
         uint256 indexed assetId,
@@ -68,6 +68,8 @@ contract Softlaw is CollectionMinter, TokenMinter {
         _;
     }
 
+    error IncorrectFee();
+
     /**
      * @dev Constructor that sets default property permissions and allows the contract to receive UNQ.
      * This contract sponsors every collection and token minting which is why it should have a balance of UNQ
@@ -76,58 +78,80 @@ contract Softlaw is CollectionMinter, TokenMinter {
      * - collectionAdmin has permissions to change properties.
      * - token owner has no permissions to change properties
      */
-    constructor() payable CollectionMinter(true, true, false) {}
+
+    constructor() payable CollectionMinter(true, true, true) {}
 
     receive() external payable {}
 
     /**
-     * @dev Function to mint a new collection.
-     * @param _name Name of the collection.
-     * @param _description Description of the collection.
-     * @param _symbol Symbol prefix for the tokens in the collection.
-     * @param _collectionCover URL of the cover image for the collection.
-     * @param _owner Owner of the collection
-     * @return Address of the created collection.
+     * @notice Creates a new collection. The collection creation fee must be paid.
+     * @param _name The name of the collection.
+     * @param _description A brief description of the collection.
+     * @param _symbol The symbol or prefix for tokens in the collection.
+     * @param _collectionCover A URL pointing to the cover image for the collection.
+     * @param _transferEnabled Boolean flag indicating if token transfers are allowed.
+     * @param _tokenLimit The maximum number of tokens that can be minted in the collection.
+     * @param _accountTokenOwnership The maximum number of tokens one account can own in the collection.
+     * @param _nestingPermissionsTokenOwner Boolean flag indicating if the token owner has nesting permissions.
+     * @param _nestingPermissionsCollectionAdmin Boolean flag indicating if the collection admin has nesting permissions.
      */
     function mintSoftlawCollection(
         string memory _name,
         string memory _description,
         string memory _symbol,
         string memory _collectionCover,
-        CollectionNestingAndPermission memory nesting_settings,
-        CrossAddress memory _owner
-    ) external payable returns (address) {
+        bool _transferEnabled,
+        uint256 _tokenLimit,
+        uint256 _accountTokenOwnership,
+        bool _nestingPermissionsTokenOwner,
+        bool _nestingPermissionsCollectionAdmin
+    ) external payable {
+        if (msg.value != COLLECTION_HELPERS.collectionCreationFee()) revert IncorrectFee();
+
+        // 1. Set collection limits
+        CollectionLimitValue[] memory collectionLimits = new CollectionLimitValue[](3);
+        // 1.1. set account token limit
+        if (_accountTokenOwnership > 0) {
+            collectionLimits[0] = CollectionLimitValue({
+                field: CollectionLimitField.AccountTokenOwnership,
+                value: _accountTokenOwnership
+            });
+        }
+
+        // 1.2. Set collection token limit
+        if (_tokenLimit > 0) {
+            collectionLimits[1] = CollectionLimitValue({field: CollectionLimitField.TokenLimit, value: _tokenLimit});
+        }
+
+        // 1.3 Transfers are not allowed
+        collectionLimits[2] = CollectionLimitValue({
+            field: CollectionLimitField.TransferEnabled,
+            value: _transferEnabled ? 1 : 0
+        });
+
+        // 2. Create a collection
         address collectionAddress = _createCollection(
             _name,
             _description,
             _symbol,
             _collectionCover,
-            nesting_settings,
-            new CollectionLimitValue[](0),
+            CollectionNestingAndPermission({
+                token_owner: _nestingPermissionsTokenOwner,
+                collection_admin: _nestingPermissionsCollectionAdmin,
+                restricted: new address[](0)
+            }),
+            collectionLimits,
             new Property[](0),
             new TokenPropertyPermission[](0)
         );
 
         UniqueNFT collection = UniqueNFT(collectionAddress);
 
-        // Set collection sponsorship to the contract address
-        collection.setCollectionSponsorCross(CrossAddress({eth: address(this), sub: 0}));
-        // Confirm the collection sponsorship
-        collection.confirmCollectionSponsorship();
-        // Sponsor every transaction
+        collection.setCollectionSponsorCross(CrossAddress({eth: msg.sender, sub: 0}));
+        COLLECTION_HELPERS.makeCollectionERC721MetadataCompatible(collectionAddress, _collectionCover);
+        collection.changeCollectionOwnerCross(CrossAddress(msg.sender, 0));
 
-        // Set this contract as an admin
-        // Because the minted collection will be owned by the user this contract
-        // has to be set as a collection admin in order to be able to mint NFTs
-        collection.addCollectionAdminCross(CrossAddress({eth: address(this), sub: 0}));
-
-        // Transfer ownership of the collection to the contract caller
-        collection.changeCollectionOwnerCross(_owner);
-        s_collectionOwner[collectionAddress] = msg.sender;
-
-        emit CollectionCreated(collectionAddress);
-
-        return collectionAddress;
+        emit CollectionCreated(COLLECTION_HELPERS.collectionId(collectionAddress), collectionAddress);
     }
 
     /**
@@ -169,7 +193,8 @@ contract Softlaw is CollectionMinter, TokenMinter {
         string memory _image,
         address _collectionAddress
     ) external returns (uint256) {
-        uint256 tokenRegistryNew = tokenRegistry + 1;
+        tokenRegistry += 1;
+        uint256 currentTokenId = tokenRegistry;
 
         Attribute[] memory attributes = _createIPAttributes(_ipType, _jurisdiction, _details);
 
