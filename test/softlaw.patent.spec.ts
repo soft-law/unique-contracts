@@ -46,8 +46,11 @@ it("SOFTLAW - EVM: Can mint collection for free and mint tokens for free after t
 
   // Log Minter's address
   console.log(
-    "MINTER",
+    "Minter object: ",
+    minter,
+    "MINTER Contract Address EVM: ",
     minterAddress,
+    "Mirror Substrate: ",
     Address.mirror.ethereumToSubstrate(minterAddress),
   );
 
