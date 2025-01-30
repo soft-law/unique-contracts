@@ -1,0 +1,11 @@
+License Contract
+
+
+1. IP Registry - Encrypted Information.
+2. Ownership Attestation - Proof of Ownership Off-Chain ramp. (AI Agent).
+3. Payments. Licenses, Rewards, Dispute Resolution, Attestations.
+4. Rewards. Distribution between Ip owners.
+5. Dispute Resolution - proof of ownership claims - AI Agent.
+6. Jurisdiction - US an HK Regulation.
+7. Revocation - Breach of contract
+8. Exclusivity
