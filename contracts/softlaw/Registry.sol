@@ -19,7 +19,7 @@ import {Converter} from "../libraries/Converter.sol";
  * Inherits from CollectionMinter and TokenMinter.
  * See the example in tests https://github.com/UniqueNetwork/unique-contracts/blob/main/test/minter.spec.ts
  */
-contract Softlaw is CollectionMinter, TokenMinter {
+contract SoftlawRegistry is CollectionMinter, TokenMinter {
     using Converter for *;
 
     /// @dev Intellectual Property Collection Types, User can have max 4 collections, one of each one, entra como variable de nombre.
@@ -30,29 +30,6 @@ contract Softlaw is CollectionMinter, TokenMinter {
         LICENSE
     }
 
-    struct LicenseOffer {
-        uint256 nftId;
-        uint256 royaltyRate;
-        uint256 licensePrice;
-        uint256 paymentStructure;
-        CrossAddress tokenOwner;
-        bool isAccepted;
-    }
-
-    mapping(uint256 => LicenseOffer) public licenseOffers;
-    // mapping(CrossAddress => uint256) public pendingWithdrawals;
-    uint256 public licenseCounter;
-
-    event LicenseOffered(
-        CrossAddress indexed tokenOwner,
-        uint256 indexed nftId,
-        uint256 royaltyRate,
-        uint256 licensePrice,
-        uint256 paymentStructure,
-        uint256 licenseId
-    );
-    event LicenseAccepted(address indexed buyer, uint256 indexed licenseId);
-
     struct UserCollections {
         address patent;
         address copyright;
@@ -60,7 +37,7 @@ contract Softlaw is CollectionMinter, TokenMinter {
         address license;
     }
 
-    struct LicenseAsset {
+    struct IpAsset {
         IPType ipType;
         CrossAddress owner;
         // string contentHash;
@@ -76,30 +53,16 @@ contract Softlaw is CollectionMinter, TokenMinter {
 
     /// @dev track collection owners to restrict minting
     mapping(address collection => address owner) private s_collectionOwner;
-    mapping(uint256 => LicenseAsset) public softlawRegistry;
-
-    // event CollectionCreated(uint256 collectionId, address collectionAddress);
+    mapping(uint256 => IpAsset) public softlawRegistry;
 
     /// @dev Event emitted when a new collection is created.
     event CollectionCreated(address collectionAddress);
-
-    event Withdraw(address indexed owner, uint256 amount);
 
     event IPAssetRegistered(
         uint256 indexed assetId,
         IPType indexed ipType,
         address indexed collectionAddress,
         CrossAddress owner
-    );
-
-    event LicenseMinted(
-        address indexed owner,
-        uint256 indexed nftId,
-        uint256 royaltyRate,
-        uint256 licensePrice,
-        uint256 paymentStructure,
-        uint256 licenseId,
-        CrossAddress _tokenOwner
     );
 
     modifier onlyCollectionOwner(address _collectionAddress) {
@@ -118,7 +81,9 @@ contract Softlaw is CollectionMinter, TokenMinter {
      * - token owner has no permissions to change properties
      */
 
-    constructor() payable CollectionMinter(true, true, true) {}
+    constructor() payable CollectionMinter(true, true, true) {
+        tokenRegistry = 1;
+    }
 
     receive() external payable {}
 
@@ -190,14 +155,14 @@ contract Softlaw is CollectionMinter, TokenMinter {
         address _collectionAddress,
         Attribute[] memory _attributes,
         CrossAddress memory _tokenOwner
-    ) external returns (uint256) {
+    ) external onlyCollectionOwner(_collectionAddress) returns (uint256) {
         tokenRegistry += 1;
 
         // Mint token
         uint256 tokenId = _createToken(_collectionAddress, _imagesHash, _name, _description, _attributes, _tokenOwner);
 
         // Store IP asset
-        softlawRegistry[tokenId] = LicenseAsset({
+        softlawRegistry[tokenId] = IpAsset({
             ipType: _ipType,
             owner: _tokenOwner,
             // contentHash: _contentHash,
@@ -214,65 +179,6 @@ contract Softlaw is CollectionMinter, TokenMinter {
         return tokenRegistry;
     }
 
-    //      NFT ID
-    // Royalty Rate
-    // License Price
-    // Currency
-    // License Duration
-    //     Days / months / years
-    //     Expiration Date
-    // Payment structure
-    //     One Time Payment
-    //     Recurring Payment
-
-    function offerLicense(
-        uint256 _nftId,
-        uint256 _royaltyRate,
-        uint256 _licensePrice,
-        uint256 _paymentStructure,
-        CrossAddress memory _tokenOwner
-    ) external returns (uint256) {
-        licenseCounter++;
-        uint256 licenseId = licenseCounter;
-
-        licenseOffers[licenseId] = LicenseOffer({
-            nftId: _nftId,
-            royaltyRate: _royaltyRate,
-            licensePrice: _licensePrice,
-            paymentStructure: _paymentStructure,
-            tokenOwner: _tokenOwner,
-            isAccepted: false
-        });
-
-        emit LicenseOffered(_tokenOwner, _nftId, _royaltyRate, _licensePrice, _paymentStructure, licenseId);
-
-        return licenseId;
-    }
-
-    function acceptLicense(uint256 _licenseId) external payable {
-        LicenseOffer storage offer = licenseOffers[_licenseId];
-        require(!offer.isAccepted, "License already accepted");
-        require(msg.value >= offer.licensePrice, "Insufficient payment");
-
-        offer.isAccepted = true;
-        CrossAddress memory buyer = CrossAddress({eth: msg.sender, sub: 0});
-        // pendingWithdrawals[offer.tokenOwner] += msg.value;
-
-        emit LicenseAccepted(msg.sender, _licenseId);
-    }
-
-    // function withdrawPayments() external {
-    //     CrossAddress memory owner = CrossAddress({eth: msg.sender, sub: 0});
-    //     uint256 amount = pendingWithdrawals[owner];
-    //     require(amount > 0, "No funds to withdraw");
-    //     pendingWithdrawals[owner] = 0;
-
-    //     (bool success, ) = payable(msg.sender).call{value: amount}("");
-    //     require(success, "Withdrawal failed");
-
-    //     emit Withdraw(msg.sender, amount);
-    // }
-
     ///// HELPER FUNCTIONS///
     function _getIPTypeString(IPType _type) private pure returns (string memory) {
         if (_type == IPType.PATENT) return "PATENT";
@@ -282,14 +188,14 @@ contract Softlaw is CollectionMinter, TokenMinter {
         return "";
     }
 
-    function _createSoftlawTokenAttributes(
-        IPType _type,
-        string memory _jurisdiction
-    ) private view returns (Attribute[] memory) {
-        Attribute[] memory attributes = new Attribute[](4);
-        attributes[0] = Attribute("IP Type", _getIPTypeString(_type));
-        attributes[1] = Attribute("Jurisdiction", _jurisdiction);
-        attributes[2] = Attribute("Registration Date", block.timestamp.uint2str());
-        return attributes;
-    }
+    // function _createSoftlawTokenAttributes(
+    //     IPType _type,
+    //     string memory _jurisdiction
+    // ) private view returns (Attribute[] memory) {
+    //     Attribute[] memory attributes = new Attribute[](4);
+    //     attributes[0] = Attribute("IP Type", _getIPTypeString(_type));
+    //     attributes[1] = Attribute("Jurisdiction", _jurisdiction);
+    //     attributes[2] = Attribute("Registration Date", block.timestamp.uint2str());
+    //     return attributes;
+    // }
 }

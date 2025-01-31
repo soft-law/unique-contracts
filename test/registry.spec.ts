@@ -5,7 +5,7 @@ import { Address } from "@unique-nft/utils";
 import { expect } from "chai";
 import testConfig from "./utils/config";
 
-it("Softlaw- EVM: Can mint collection for free and mint tokens for free after that", async () => {
+it("Softlaw  Registry- EVM: Can mint collection for free and mint tokens for free after that", async () => {
   const [minterOwner] = await ethers.getSigners();
 
   const user = ethers.Wallet.createRandom(ethers.provider);
@@ -18,7 +18,7 @@ it("Softlaw- EVM: Can mint collection for free and mint tokens for free after th
   console.log(userBalanceBefore);
 
   // NOTE: minterOwner deploy Softlaw contract
-  const MinterFactory = await ethers.getContractFactory("Softlaw");
+  const MinterFactory = await ethers.getContractFactory("SoftlawRegistry");
   const minter = await MinterFactory.connect(minterOwner).deploy({
     gasLimit: 7500_000,
     value: parseEther("100"),
@@ -71,16 +71,6 @@ it("Softlaw- EVM: Can mint collection for free and mint tokens for free after th
     // { gasLimit: 500000 },
   );
 
-  //   string memory _name,
-  //   string memory _description,
-  //   string memory _symbol,
-  //   string memory _collectionCover,
-  //   bool _transferEnabled,
-  //   uint256 _tokenLimit,
-  //   uint256 _accountTokenOwnership,
-  //   bool _nestingPermissionsTokenOwner,
-  //   bool _nestingPermissionsCollectionAdmin
-
   const receipt = await mintCollectionTx.wait();
   if (!receipt) throw Error("No receipt");
 
@@ -115,34 +105,9 @@ it("Softlaw- EVM: Can mint collection for free and mint tokens for free after th
     )
     .then((tx) => tx.wait());
 
-  console.log(token);
+  console.log("NFT Id", token);
 
   // NOTE: check that user's balance doesn't change
   const userBalanceAfter = await ethers.provider.getBalance(user);
   expect(userBalanceAfter).to.deep.eq(userBalanceBefore);
-
-  // uint256 _nftId,
-  // uint256 _royaltyRate,
-  // uint256 _licensePrice,
-  // uint256 _paymentStructure,
-  // CrossAddress memory _tokenOwner
-  /// offerLicense
-  const license = await minter
-    .connect(user)
-    .offerLicense(
-      1,
-      10,
-      100,
-      1,
-      // CrossAddress: user sets its own address as a token owner
-      { eth: user.address, sub: 0 },
-      { gasLimit: 700_000 },
-    )
-    .then((tx) => tx.wait());
-
-  console.log("Offer License:", license);
-
-  // const acceptLicense = await minter.connect(user).acceptLicense(1);
-
-  // console.log("Accept License:", acceptLicense);
 });
